@@ -82,30 +82,32 @@ MovLayer ml3 = { &layer3, {1,1}, 0 }; /**< not all layers move */
 MovLayer ml1 = { &layer1, {1,2}, &ml3 }; 
 MovLayer ml0 = { &layer0, {2,1}, &ml1 }; 
 
+//Just draws anything aorund a moving layer 
 void movLayerDraw(MovLayer *movLayers, Layer *layers)
 {
   int row, col;
   MovLayer *movLayer;
 
-  and_sr(~8);			/**< disable interrupts (GIE off) */
+  and_sr(~8);			/**< disable interrupts (GIE off) */ //Turn off all interrupts 
   for (movLayer = movLayers; movLayer; movLayer = movLayer->next) { /* for each moving layer */
     Layer *l = movLayer->layer;
     l->posLast = l->pos;
     l->pos = l->posNext;
   }
-  or_sr(8);			/**< disable interrupts (GIE on) */
+  or_sr(8);			/**< disable interrupts (GIE on) */ //Turn on all interupts
 
 
   for (movLayer = movLayers; movLayer; movLayer = movLayer->next) { /* for each moving layer */
     Region bounds;
-    layerGetBounds(movLayer->layer, &bounds);
+    layerGetBounds(movLayer->layer, &bounds); 
     lcd_setArea(bounds.topLeft.axes[0], bounds.topLeft.axes[1], 
 		bounds.botRight.axes[0], bounds.botRight.axes[1]);
+	//For every pixel in the area..
     for (row = bounds.topLeft.axes[1]; row <= bounds.botRight.axes[1]; row++) {
       for (col = bounds.topLeft.axes[0]; col <= bounds.botRight.axes[0]; col++) {
 	Vec2 pixelPos = {col, row};
 	u_int color = bgColor;
-	Layer *probeLayer;
+	Layer *probeLayer; //We probe to get the colors..
 	for (probeLayer = layers; probeLayer; 
 	     probeLayer = probeLayer->next) { /* probe all layers, in order */
 	  if (abShapeCheck(probeLayer->abShape, &probeLayer->pos, &pixelPos)) {
