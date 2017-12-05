@@ -167,7 +167,7 @@ void mlAdvance(MovLayer *whitePaddle, MovLayer *redPaddle, MovLayer *ball, MovLa
         newPos.axes[axis] += (2*velocity);
       }//if outside of fence
       
-      if( (ballBoundary.botRight.axes[1] == whiteBoundary.topLeft.axes[0]) && (ballBoundary.topLeft.axes[axis] == whiteBoundary.botRight.axes[axis]) ){
+      if( (ballBoundary.botRight.axes[1] == whiteBoundary.topLeft.axes[0]) && (ballBoundary.botRight.axes[axis] == whiteBoundary.botRight.axes[axis]) ){
         drawString5x7(50,50, "2ndIF", COLOR_GREEN, COLOR_BLACK); 
         int velocity= ball->velocity.axes[axis] = -ball->velocity.axes[axis];
         posBall.axes[axis] += (4*velocity);
