@@ -16,26 +16,17 @@
 
 #define GREEN_LED BIT6
 
-AbRect rect10 = {abRectGetBounds, abRectCheck, {1,10}}; //Paddle rectangles definition!
+AbRect rect10 = {abRectGetBounds, abRectCheck, {2,10}}; //Paddle rectangles definition!
 AbRect line = {abRectGetBounds, abRectCheck, {1, 50}};//Paddle rectangles definition!
 
 AbRectOutline fieldOutline = {	/* playing field */
   abRectOutlineGetBounds, abRectOutlineCheck,   
-  {screenWidth/2 - 4, screenHeight/2 - 12}
+  {screenWidth/2 - 2, screenHeight/2 - 12}
 };
 
-/**
-Layer layer4 = {
-  (AbShape *)&rightArrow,
-  {(screenWidth/2)+10, (screenHeight/2)+5}, //< bit below & right of center
-  {0,0}, {0,0},				    // last & next pos 
-  COLOR_PINK,
-  0
-}; **/
-  
 //White ball
 Layer layer3 = {
-  (AbShape *)&circle8,
+  (AbShape *)&circle4,
   {(screenWidth/2)+10, (screenHeight/2)+5}, /**< bit below & right of center */
   {0,0}, {0,0},				    /* last & next pos */
   COLOR_WHITE,
@@ -80,7 +71,7 @@ typedef struct MovLayer_s {
 } MovLayer;
 
 /* initial value of {0,0} will be overwritten */
-MovLayer ml3 = { &layer3, {1,1}, 0 }; /**< not all layers move */
+MovLayer ml3 = { &layer3, {1,3}, 0 }; /**< not all layers move */
 MovLayer ml1 = { &layer1, {0,5}, &ml3 }; 
 MovLayer ml0 = { &layer0, {0,5}, &ml1 }; 
 
@@ -135,52 +126,85 @@ Region fence = {{10,10}, {SHORT_EDGE_PIXELS-10, LONG_EDGE_PIXELS-10}}; /**< Crea
 *  \param ml The moving shape to be advanced
 *  \param fence The region which will serve as a boundary for ml
 */
-void mlAdvance(MovLayer *whitePaddle, MovLayer *redPaddle, MovLayer *ball, MovLayer *ml, Region *fence)
+void mlAdvance(MovLayer *whitePaddle, MovLayer *redPaddle, MovLayer *ml, Region *fence)
 {
   Vec2 newPos;
-  Vec2 posBall;
-  Vec2 posRed;
-  Vec2 posWhite;
+  Vec2 posBall; //not used
+  Vec2 posRed; //notUsed
+  Vec2 posWhite; //notused
   
   u_char axis;
+  u_char axisRed; //not used
+  u_char axisWhite; //not used
   
   Region shapeBoundary; //This is the fence
   Region ballBoundary;
   Region redBoundary;
   Region whiteBoundary;
   
-  for (; ml; ml = ml->next) {
-    
+  ballBoundary.topLeft.axes[0] = fence -> topLeft.axes[0] + 7;
+  ballBoundary.topLeft.axes[1] = fence -> topLeft.axes[1];
+  ballBoundary.botRight.axes[0] = fence -> botRight.axes[0] - 7;
+  ballBoundary.botRight.axes[1] = fence -> botRight.axes[0];
+  
+  for (; ml; ml = ml->next) 
+  {
     vec2Add(&newPos, &ml->layer->posNext, &ml->velocity); 
-    vec2Add(&posRed, &ball->layer->posNext, &ball->velocity);
-    //grab the vector 
+    vec2Add(&posRed, &redPaddle->layer->posNext, &redPaddle->velocity); //not used
+    vec2Add(&posWhite, &whitePaddle->layer->posNext, &whitePaddle->velocity); //not used
     abShapeGetBounds(ml->layer->abShape, &newPos, &shapeBoundary);
-    abShapeGetBounds(ball->layer->abShape, &posBall, &ballBoundary);
-    abShapeGetBounds(redPaddle->layer->abShape, &posRed, &redBoundary);
-    abShapeGetBounds(whitePaddle->layer->abShape, &posWhite, &whiteBoundary);
-
-    for (axis = 0; axis < 2; axis ++) {
-      
-      if ( (shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) || (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis])) {
-         drawString5x7(60,60, "FIRST", COLOR_GREEN, COLOR_BLACK);
-        int velocity= ml->velocity.axes[axis] = -ml->velocity.axes[axis];
-        newPos.axes[axis] += (2*velocity);
-      }//if outside of fence
-      
-      if( (ballBoundary.botRight.axes[1] == whiteBoundary.topLeft.axes[0]) && (ballBoundary.botRight.axes[axis] == whiteBoundary.botRight.axes[axis]) ){
-        drawString5x7(50,50, "2ndIF", COLOR_GREEN, COLOR_BLACK); 
-        int velocity= ball->velocity.axes[axis] = -ball->velocity.axes[axis];
-        posBall.axes[axis] += (4*velocity);
-      }
-      
-      if( (ballBoundary.topLeft.axes[axis] == redBoundary.topLeft.axes[axis]) || (ballBoundary.topLeft.axes[axis] == redBoundary.botRight.axes[axis]) ){
-        drawString5x7(70,70, "3rdIF", COLOR_GREEN, COLOR_BLACK); 
-        int velocity= ball->velocity.axes[axis] = -ball->velocity.axes[axis];
-        posBall.axes[axis] += (4*velocity);
-      }
-    } /**< for axis */
-    ml->layer->posNext = newPos;
-  } /**< for ml */
+    abShapeGetBounds(redPaddle->layer->abShape, &posRed, &redBoundary);//not used
+    abShapeGetBounds(whitePaddle->layer->abShape, &posWhite, &whiteBoundary); //not used
+        for (axis = 0; axis < 2; axis ++)
+        {
+          if((shapeBoundary.topLeft.axes[axis] < ballBoundary.topLeft.axes[axis]) || (shapeBoundary.botRight.axes[axis] > ballBoundary.botRight.axes[axis]))
+          { 
+            if( (shapeBoundary.topLeft.axes[1] > redBoundary.topLeft.axes[1]) && (shapeBoundary.botRight.axes[1] < redBoundary.botRight.axes[1]) && (shapeBoundary.topLeft.axes[0] > (screenWidth/2)))
+            {
+              int velocity = ml->velocity.axes[0] = -ml->velocity.axes[0];
+              newPos.axes[0] += (4*velocity);
+              drawString5x7(30,30, "ERROR 1!", COLOR_GREEN, COLOR_BLACK);
+              break;
+            }
+            if( (shapeBoundary.topLeft.axes[1] > whiteBoundary.topLeft.axes[1]) && (shapeBoundary.botRight.axes[1] < whiteBoundary.botRight.axes[1]) && (shapeBoundary.topLeft.axes[0] < (screenWidth/2)) )
+            {
+                int velocity = ml->velocity.axes[0] = -ml->velocity.axes[0];
+                newPos.axes[0] += (4*velocity);
+                drawString5x7(40,40, "ERROR 2!", COLOR_GREEN, COLOR_BLACK);
+                break;
+            }
+          }
+          
+          if ((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) || (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis])) 
+          {
+            int velocity = ml->velocity.axes[axis] = -ml->velocity.axes[axis];
+            newPos.axes[axis] += (2*velocity);
+            //drawString5x7(50,50, "ERROR 3!", COLOR_GREEN, COLOR_BLACK);
+          } /**< for axis */
+          if (shapeBoundary.topLeft.axes[0] < fence->topLeft.axes[0]) 
+          {
+            newPos.axes[0] = screenWidth/2;
+            newPos.axes[1] = screenHeight/2;
+            ml->velocity.axes[0] = 2;
+            ml->layer->posNext = newPos;
+            int redrawScreen = 1;
+            //drawString5x7(70, 70, "ERROR 4!", COLOR_GREEN, COLOR_BLACK);
+            break;
+          }
+          else if (shapeBoundary.botRight.axes[0] > fence->botRight.axes[0]) 
+          {
+            newPos.axes[0] = screenWidth/2;
+            newPos.axes[1] = screenHeight/2;
+            ml->velocity.axes[0] = -2;
+            ml->layer->posNext = newPos;
+            int redrawScreen = 1;
+            //drawString5x7(60,60, "ERROR 5!", COLOR_GREEN, COLOR_BLACK);
+            break;
+          }
+        
+        }/**< for axis */
+        ml->layer->posNext = newPos;
+  }/**< for ml */
 }
 
 void p1(u_int button)
@@ -275,7 +299,7 @@ void wdt_c_handler()
   P1OUT |= GREEN_LED;		      /**< Green LED on when cpu on */
   count ++;
   if (count == 15) {
-    mlAdvance(&ml0, &ml1, &ml3, &ml0, &fieldFence);
+    mlAdvance(&ml1, &ml0, &ml0, &fieldFence);
     if (p2sw_read())
       redrawScreen = 1;
     count = 0;
