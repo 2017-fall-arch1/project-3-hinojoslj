@@ -1,10 +1,9 @@
-/** \file shapemotion.c
-*  \brief This is a simple shape motion demo.
-*  This demo creates two layers containing shapes.
-*  One layer contains a rectangle and the other a circle.
-*  While the CPU is running the green LED is on, and
-*  when the screen does not need to be redrawn the CPU
-*  is turned off along with the green LED.
+/** \file pong.c 
+*  \brief This is a simple game of pong. 
+*  This demo creates layers to put in shapes while
+*   also handling button presses. Lastly, this demo 
+*   plays audio everytime the ball passes through 
+*   a wall. 
 */  
 #include <msp430.h>
 #include <libTimer.h>
@@ -17,36 +16,36 @@
 
 #define GREEN_LED BIT6
 
-char printRed[0];
-int redScore = 0;
+char printRed[0]; //RedPlayer: Used to access the score
+int redScore = 0; //RedPlayer: Used to store the current value of the score
 
-char printWhite[0];
-int whiteScore = 0;
+char printWhite[0]; //RedPlayer: Used to access the score
+int whiteScore = 0; //RedPlayer: Used to store the current value of the score
 
-AbRect rect10 = {abRectGetBounds, abRectCheck, {1,8}}; //Paddle rectangles definition!
-AbRect line = {abRectGetBounds, abRectCheck, {1, 50}};//Paddle rectangles definition!
+AbRect rect10 = {abRectGetBounds, abRectCheck, {2,10}}; //Paddle rectangles definition!
 
-AbRectOutline fieldOutline = {	/* playing field */
+//FieldOutLine
+AbRectOutline fieldOutline = {
   abRectOutlineGetBounds, abRectOutlineCheck,   
   {screenWidth/2 - 2, screenHeight/2 - 12}
 };
 
 //White ball
-Layer layer3 = {
-  (AbShape *)&circle2,
+Layer layer2 = {
+  (AbShape *)&circle4,
   {(screenWidth/2)+10, (screenHeight/2)+5}, /**< bit below & right of center */
   {0,0}, {0,0},				    /* last & next pos */
   COLOR_WHITE,
   0,
 };
 
-
-Layer fieldLayer = {		/* playing field as a layer */
+//Play field layer
+Layer fieldLayer = {
   (AbShape *) &fieldOutline,
   {screenWidth/2, screenHeight/2},/**< center */
   {0,0}, {0,0},				    /* last & next pos */
   COLOR_WHITE,
-  &layer3
+  &layer2
 };
 
 //Red Paddle
@@ -78,8 +77,8 @@ typedef struct MovLayer_s {
 } MovLayer;
 
 /* initial value of {0,0} will be overwritten */
-MovLayer ml3 = { &layer3, {1,7}, 0 }; /**< not all layers move */
-MovLayer ml1 = { &layer1, {0,0}, &ml3 }; 
+MovLayer ml2 = { &layer2, {1,3}, 0 }; /**< not all layers move */
+MovLayer ml1 = { &layer1, {0,0}, &ml2 }; 
 MovLayer ml0 = { &layer0, {0,0}, &ml1 }; 
 
 //Just draws anything aorund a moving layer 
@@ -103,7 +102,6 @@ void movLayerDraw(MovLayer *movLayers, Layer *layers)
   for (movLayer = movLayers; movLayer; movLayer = movLayer->next) { /* for each moving layer */
     Region bounds;
     layerGetBounds(movLayer->layer, &bounds); 
-    //NOTE: I believe these next two lines tell the msp430 what the orientation is and how to render the objects of the LCD...
     lcd_setArea(bounds.topLeft.axes[0], bounds.topLeft.axes[1], 
     bounds.botRight.axes[0], bounds.botRight.axes[1]);
   //For every pixel in the area..
@@ -125,30 +123,40 @@ void movLayerDraw(MovLayer *movLayers, Layer *layers)
   } // for moving layer being updated
 }	  
 
-//NOTE: What does this do...?
 Region fence = {{10,10}, {SHORT_EDGE_PIXELS-10, LONG_EDGE_PIXELS-10}}; /**< Create a fence region */
 
 /** Advances a moving shape within a fence
 *  
 *  \param ml The moving shape to be advanced
 *  \param fence The region which will serve as a boundary for ml
+* 
+*   This the core of the game as it handles the collisions. By tracking the Y position of the Ball 
+*   and comparing it with the Y position of the paddle it collides. Additionally, check which wall 
+*   the ball collided with because if its the horizontal wall the ball bounces off, but if it is the 
+*   vertical wall then the ball needs to be redrawn in the middle, our scores need to be updated, and
+*   a sound needs to be played. This code was made possible with the help of Miguel Nunez, Robert Facio, 
+*   and Brian Riveron. 
 */
 void mlAdvance(MovLayer *whitePaddle, MovLayer *redPaddle, MovLayer *ml, Region *fence)
 {
+  //The vectors of the elements of the game..
   Vec2 newPos;
-  Vec2 posBall; //not used
-  Vec2 posRed; //notUsed
-  Vec2 posWhite; //notused
+  Vec2 posBall;
+  Vec2 posRed;
+  Vec2 posWhite;
   
+  //The axes of the elements of the game..
   u_char axis;
-  u_char axisRed; //not used
-  u_char axisWhite; //not used
+  u_char axisRed;
+  u_char axisWhite;
   
+  //The regions which allow us to specify the XY coordinates..
   Region shapeBoundary; //This is the fence
   Region ballBoundary;
   Region redBoundary;
   Region whiteBoundary;
   
+  //Initializes the ball boundary based on the fence..
   ballBoundary.topLeft.axes[0] = fence -> topLeft.axes[0] + 7;
   ballBoundary.topLeft.axes[1] = fence -> topLeft.axes[1];
   ballBoundary.botRight.axes[0] = fence -> botRight.axes[0] - 7;
@@ -157,52 +165,57 @@ void mlAdvance(MovLayer *whitePaddle, MovLayer *redPaddle, MovLayer *ml, Region 
   for (; ml; ml = ml->next) 
   {
     vec2Add(&newPos, &ml->layer->posNext, &ml->velocity); 
-    vec2Add(&posRed, &redPaddle->layer->posNext, &redPaddle->velocity); //not used
-    vec2Add(&posWhite, &whitePaddle->layer->posNext, &whitePaddle->velocity); //not used
+    vec2Add(&posRed, &redPaddle->layer->posNext, &redPaddle->velocity); 
+    vec2Add(&posWhite, &whitePaddle->layer->posNext, &whitePaddle->velocity); 
+    
     abShapeGetBounds(ml->layer->abShape, &newPos, &shapeBoundary);
-    abShapeGetBounds(redPaddle->layer->abShape, &posRed, &redBoundary);//not used
-    abShapeGetBounds(whitePaddle->layer->abShape, &posWhite, &whiteBoundary); //not used
+    abShapeGetBounds(redPaddle->layer->abShape, &posRed, &redBoundary);
+    abShapeGetBounds(whitePaddle->layer->abShape, &posWhite, &whiteBoundary); 
         for (axis = 0; axis < 2; axis ++)
         {
           if((shapeBoundary.topLeft.axes[axis] < ballBoundary.topLeft.axes[axis]) || (shapeBoundary.botRight.axes[axis] > ballBoundary.botRight.axes[axis]))
           { 
-            //buzzer_set_period(1000);
+            //If the ball bounces off the red paddle
             if( (shapeBoundary.topLeft.axes[1] > redBoundary.topLeft.axes[1]) && (shapeBoundary.botRight.axes[1] < redBoundary.botRight.axes[1]) && (shapeBoundary.topLeft.axes[0] > (screenWidth/2)))
             {
               int velocity = ml->velocity.axes[0] = -ml->velocity.axes[0];
               newPos.axes[0] += (4*velocity);
               //drawString5x7(30,30, "ERROR 1!", COLOR_GREEN, COLOR_BLACK);
-              buzzer_set_period(200);
+              //buzzer_set_period(200);
               break;
             }
+            //If the ball bouces off the white paddle
             if( (shapeBoundary.topLeft.axes[1] > whiteBoundary.topLeft.axes[1]) && (shapeBoundary.botRight.axes[1] < whiteBoundary.botRight.axes[1]) && (shapeBoundary.topLeft.axes[0] < (screenWidth/2)) )
             {
                 int velocity = ml->velocity.axes[0] = -ml->velocity.axes[0];
                 newPos.axes[0] += (4*velocity);
                 //drawString5x7(40,40, "ERROR 2!", COLOR_GREEN, COLOR_BLACK);
-                buzzer_set_period(4000);
+                //buzzer_set_period(4000);
                 break;
             }
           }
-          
+          //If the ball collides with the horizontal wall.
           if ((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) || (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis])) 
           {
             int velocity = ml->velocity.axes[axis] = -ml->velocity.axes[axis];
             newPos.axes[axis] += (2*velocity);
             //drawString5x7(50,50, "ERROR 3!", COLOR_GREEN, COLOR_BLACK);
           } /**< for axis */
+          
+          //If the ball goes through the left vertical wall.
           if (shapeBoundary.topLeft.axes[0] < fence->topLeft.axes[0]) 
           {
             newPos.axes[0] = screenWidth/2;
             newPos.axes[1] = screenHeight/2;
             ml->velocity.axes[0] = 2;
             ml->layer->posNext = newPos;
-            
             redScore++;
-            int redrawScreen = 1;
             //drawString5x7(70, 70, "ERROR 4!", COLOR_GREEN, COLOR_BLACK);
+            int redrawScreen = 1;
             break;
           }
+          
+          //If the ball goes through the right vertical wall.
           else if (shapeBoundary.botRight.axes[0] > fence->botRight.axes[0]) 
           {
             newPos.axes[0] = screenWidth/2;
@@ -210,8 +223,8 @@ void mlAdvance(MovLayer *whitePaddle, MovLayer *redPaddle, MovLayer *ml, Region 
             ml->velocity.axes[0] = -2;
             ml->layer->posNext = newPos;
             whiteScore++;
-            int redrawScreen = 1;
             //drawString5x7(60,60, "ERROR 5!", COLOR_GREEN, COLOR_BLACK);
+            int redrawScreen = 1;
             break;
           }
         
@@ -225,23 +238,26 @@ void mlAdvance(MovLayer *whitePaddle, MovLayer *redPaddle, MovLayer *ml, Region 
         }
         
         printRed[0] = '0' + redScore;
-        printWhite[0] = '0' + whiteScore;
+        printWhite[0] = '0' + whiteScore;        
+        
+
   }/**< for ml */
-  int redrawScreen = 1;
+   int redrawScreen = 1;
   drawString5x7(3, 151, printRed, COLOR_RED, COLOR_BLACK);
   drawString5x7(120, 151, printWhite, COLOR_WHITE, COLOR_BLACK);
-  
+ 
 }
 
+//Track the buttons of player 1 and set the velocity of the moving paddle.
 void p1(u_int button)
 {
     if( !(button & (1 << 0)))
     {
-      ml1.velocity.axes[1] = -10;
+      ml1.velocity.axes[1] = -5;
     }
     else if(!( button & (1<<1)))
     {
-      ml1.velocity.axes[1] = 10; 
+      ml1.velocity.axes[1] = 5; 
     }
     else
     {
@@ -249,15 +265,16 @@ void p1(u_int button)
     }
 }
 
+//Track the buttons of player 2 and set the velocity of the moving paddle
 void p2(u_int button)
 {
     if( !(button & (1 << 2)))
     {
-      ml0.velocity.axes[1] = -10;
+      ml0.velocity.axes[1] = -5;
     }
     else if(!( button & (1<<3)))
     {
-      ml0.velocity.axes[1] = 10; 
+      ml0.velocity.axes[1] = 5; 
     }
     else
     {
@@ -297,7 +314,7 @@ void main()
   layerGetBounds(&fieldLayer, &fieldFence);
   layerGetBounds(&layer1, &fieldPaddleRed);
   layerGetBounds(&layer0, &fieldPaddleWhite);
-  layerGetBounds(&layer3, &fieldBall);
+  layerGetBounds(&layer2, &fieldBall);
   
   enableWDTInterrupts();      /**< enable periodic interrupt */
   or_sr(0x8);	              /**< GIE (enable interrupts) */
@@ -316,7 +333,7 @@ void main()
     P1OUT |= GREEN_LED;       /**< Green led on when CPU on */
     redrawScreen = 0;
     movLayerDraw(&ml0, &layer0);
-    buzzer_set_period(0);
+    //buzzer1();
 
   }
 }
