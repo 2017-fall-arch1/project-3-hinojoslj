@@ -3,7 +3,7 @@
 
 Welcome to Pong! Here you will the project to make pong on your own MSP430!
 
-## shapeMotion
+## PONG
 This is the base of the whole game. Everything is handled here!
   - Layers define the objects such as the redPaddle, whitePaddle, ball, & the playField
   - Regions get the information of these layers 
